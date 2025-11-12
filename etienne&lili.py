@@ -142,3 +142,93 @@ class TowerSim(QMainWindow):
         self.btn_land.clicked.connect(self.try_land)
         self.btn_end.clicked.connect(self.end_game_forced)
         self.info_list.itemClicked.connect(self.list_item_clicked)
+
+# Layout
+        right_layout = QVBoxLayout()
+        right_layout.addWidget(title)
+        right_layout.addWidget(self.info_list)
+        right_layout.addWidget(self.info_label)
+        right_layout.addStretch()
+        for b in buttons:
+            right_layout.addWidget(b)
+        right_layout.addWidget(self.btn_end)
+
+        right_panel = QWidget()
+        right_panel.setLayout(right_layout)
+        right_panel.setStyleSheet("background-color: #111; color: white;")
+
+        main_layout = QHBoxLayout()
+        main_layout.addWidget(self.view)
+        main_layout.addWidget(right_panel)
+        central = QWidget()
+        central.setLayout(main_layout)
+        self.setCentralWidget(central)
+
+        # Timers
+        self.update_timer = QTimer()
+        self.update_timer.timeout.connect(self.update_simulation)
+        self.update_timer.start(UPDATE_INTERVAL_MS)
+
+        self.spawn_timer = QTimer()
+        self.spawn_timer.timeout.connect(self.spawn_plane)
+        self.spawn_timer.start(SPAWN_INTERVAL_MS_START)
+
+        self.scene.selectionChanged.connect(self.scene_selection_changed)
+        for _ in range(2):
+            self.spawn_plane()
+
+        self.status = self.statusBar()
+        self.status.setStyleSheet("color: white; background-color: #222;")
+        self.update_status()
+
+
+    def update_status(self):
+        self.status.showMessage(f"Score: {self.score} | Avions actifs: {len(self.planes)}")
+
+    def _generate_callsign(self):
+        prefixes = ["AF", "BA", "LH", "EN", "FR", "IP", "QA"]
+        return random.choice(prefixes) + str(random.randint(100, 999))
+
+
+    def spawn_plane(self):
+        """Spawn d'un avion avec vérification de distance minimale"""
+        edge = random.choice(['top', 'bottom', 'left', 'right'])
+        margin = 10
+        attempt = 0
+        while True:
+            attempt += 1
+            if edge == 'top':
+                x, y, heading = random.uniform(0, RADAR_W), -margin, random.uniform(120, 240)
+            elif edge == 'bottom':
+                x, y, heading = random.uniform(0, RADAR_W), RADAR_H + margin, random.uniform(-60, 60)
+            elif edge == 'left':
+                x, y, heading = -margin, random.uniform(0, RADAR_H), random.uniform(-30, 30)
+            else:
+                x, y, heading = RADAR_W + margin, random.uniform(0, RADAR_H), random.uniform(150, 210)
+            if all(math.hypot(p.x - x, p.y - y) > 80 for p in self.planes) or attempt > 10:
+                break
+
+        callsign = self._generate_callsign()
+        speed_kmh = random.uniform(200, 600)
+        altitude = random.choice([2000, 3000, 4000, 5000])
+        fuel = random.uniform(40, 100)
+        model = PlaneModel(callsign, x, y, heading % 360, speed_kmh, altitude, fuel)
+        self.planes.append(model)
+
+        item = PlaneItem(model)
+        item.setPos(model.x, model.y)
+        self.scene.addItem(item)
+        self.plane_items[model.id] = item
+
+        lw_item = QListWidgetItem(f"{model.callsign} | Alt {model.altitude}m | {int(model.speed_kmh)} km/h | Fuel {int(model.fuel)}%")
+        lw_item.setData(Qt.UserRole, model.id)
+        self.info_list.addItem(lw_item)
+
+
+    def update_simulation(self):
+        dt = UPDATE_INTERVAL_MS / 1000.0
+        to_remove = []
+
+        for model in list(self.planes):
+            if model.landed or model.crashed:
+                continue
