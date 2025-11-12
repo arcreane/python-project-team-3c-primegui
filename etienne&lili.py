@@ -232,3 +232,46 @@ class TowerSim(QMainWindow):
         for model in list(self.planes):
             if model.landed or model.crashed:
                 continue
+                # consommation carburant ajustée selon la vitesse
+                model.fuel -= FUEL_CONSUMPTION_PER_TICK * (model.speed_kmh / 400)
+                if model.fuel <= 0:
+                    model.fuel = 0
+                    model.emergency = "Panne carburant"
+                    model.crashed = True
+                    self.schedule_removal(model)
+                    continue
+
+                if model.altitude < 100:
+                    model.crashed = True
+                    model.emergency = "Crash au sol"
+                    self.schedule_removal(model)
+                    continue
+
+                # déplacement km/h -> px/s
+                speed_px_s = (model.speed_kmh / 3.6) / (PIXEL_TO_KM * 1000)
+                rad = math.radians(model.heading)
+                model.x += math.cos(rad) * speed_px_s * dt
+                model.y += math.sin(rad) * speed_px_s * dt
+
+                item = self.plane_items.get(model.id)
+                if item:
+                    item.setPos(model.x, model.y)
+                    item.update_visual()
+
+                margin = 100
+                if model.x < -margin or model.x > RADAR_W + margin or model.y < -margin or model.y > RADAR_H + margin:
+                    to_remove.append(model)
+
+                # Collisions
+            for i in range(len(self.planes)):
+                for j in range(i + 1, len(self.planes)):
+                    a, b = self.planes[i], self.planes[j]
+                    if a.landed or b.landed or a.crashed or b.crashed:
+                        continue
+                    if math.hypot(a.x - b.x, a.y - b.y) < SAFE_DISTANCE and abs(
+                            a.altitude - b.altitude) < ALTITUDE_SAFE_DIFF:
+                        self.handle_collision(a, b)
+                        return
+
+            for m in to_remove:
+                self.remove_plane(m, penalize=False)
