@@ -70,3 +70,4 @@ class PlaneItem(QGraphicsEllipseItem):
         self.setTransform(transform)
 
 
+# FENÊTRE PRINCIPALE
