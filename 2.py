@@ -1,9 +1,4 @@
 # main.py
-"""
-Simulateur de tour de contrôle - version finale améliorée
-Auteur : Étienne & ChatGPT
-Dépendances: PySide6
-"""
 
 import sys
 import math
